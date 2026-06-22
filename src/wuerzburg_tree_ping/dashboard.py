@@ -238,6 +238,7 @@ def collect_snapshot(*, district: str | None = None, lat: float = toilets.DEFAUL
 
 
 MAX_CHAT_CHARS = 12000
+CONNECTED_AI: dict[str, str] = {}
 
 
 def load_env_file(path: Path | None = None) -> None:
@@ -296,11 +297,48 @@ def build_chat_messages(question: str, snapshot: dict[str, Any]) -> list[dict[st
     ]
 
 
-def ollama_chat_request(question: str, snapshot: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+def normalize_ai_connection(config: dict[str, Any]) -> dict[str, str]:
+    api_key = str(config.get("apiKey") or config.get("api_key") or "").strip()
+    if not api_key:
+        raise ValueError("Ollama API key is required")
+    base_url = str(config.get("baseUrl") or config.get("base_url") or "https://ollama.com/v1").strip().rstrip("/")
+    model = str(config.get("model") or "gpt-oss:20b").strip()
+    if not base_url.startswith(("http://", "https://")):
+        raise ValueError("Base URL must start with http:// or https://")
+    if not model:
+        raise ValueError("Model is required")
+    return {"api_key": api_key, "base_url": base_url, "model": model}
+
+
+def connect_ai(config: dict[str, Any]) -> dict[str, Any]:
+    """Store a browser-provided AI connection in process memory only."""
+    CONNECTED_AI.clear()
+    CONNECTED_AI.update(normalize_ai_connection(config))
+    return ai_status()
+
+
+def ai_status() -> dict[str, Any]:
+    load_env_file()
+    source = "browser" if CONNECTED_AI.get("api_key") else "environment" if os.getenv("OLLAMA_API_KEY") else "local"
+    return {
+        "connected": bool(CONNECTED_AI.get("api_key") or os.getenv("OLLAMA_API_KEY")),
+        "source": source,
+        "baseUrl": CONNECTED_AI.get("base_url") or os.getenv("OLLAMA_BASE_URL") or "http://127.0.0.1:11434",
+        "model": CONNECTED_AI.get("model") or os.getenv("OLLAMA_MODEL", "gpt-oss:20b"),
+    }
+
+
+def ollama_chat_request(
+    question: str,
+    snapshot: dict[str, Any],
+    *,
+    config: dict[str, str] | None = None,
+) -> tuple[str, dict[str, Any]]:
     """Return the chat endpoint and payload for native Ollama or OpenAI-compatible Ollama Cloud."""
-    explicit_api_url = (os.getenv("OLLAMA_API_URL") or "").rstrip("/")
-    base_url = (os.getenv("OLLAMA_BASE_URL") or "").rstrip("/")
-    model = os.getenv("OLLAMA_MODEL", "gpt-oss:20b")
+    config = config or {}
+    explicit_api_url = (config.get("api_url") or os.getenv("OLLAMA_API_URL") or "").rstrip("/")
+    base_url = (config.get("base_url") or os.getenv("OLLAMA_BASE_URL") or "").rstrip("/")
+    model = config.get("model") or os.getenv("OLLAMA_MODEL", "gpt-oss:20b")
     messages = build_chat_messages(question, snapshot)
 
     if explicit_api_url:
@@ -309,7 +347,7 @@ def ollama_chat_request(question: str, snapshot: dict[str, Any]) -> tuple[str, d
         api_url = f"{base_url}/chat/completions"
     elif base_url:
         api_url = base_url if base_url.endswith("/api/chat") else f"{base_url}/api/chat"
-    elif os.getenv("OLLAMA_API_KEY"):
+    elif config.get("api_key") or os.getenv("OLLAMA_API_KEY"):
         api_url = "https://ollama.com/api/chat"
     else:
         api_url = "http://127.0.0.1:11434/api/chat"
@@ -340,8 +378,9 @@ def chat_answer_from_response(result: dict[str, Any]) -> str:
 
 def chat_with_ollama(question: str, snapshot: dict[str, Any]) -> dict[str, Any]:
     load_env_file()
-    api_key = os.getenv("OLLAMA_API_KEY")
-    api_url, payload = ollama_chat_request(question, snapshot)
+    config = dict(CONNECTED_AI)
+    api_key = config.get("api_key") or os.getenv("OLLAMA_API_KEY")
+    api_url, payload = ollama_chat_request(question, snapshot, config=config)
     model = str(payload.get("model") or os.getenv("OLLAMA_MODEL", "gpt-oss:20b"))
     headers = {"Content-Type": "application/json", "User-Agent": "opendata-wuerzburg-dashboard/0.3"}
     if api_key:
@@ -481,6 +520,11 @@ DASHBOARD_HTML = r'''<!doctype html>
     .chatHead h2 { margin: 0 0 6px; }
     .chatHead p { margin: 0; color: #bdd0df; }
     .chatBadge { color: #8ee7ff; font-size: 12px; text-transform: uppercase; letter-spacing: .1em; white-space: nowrap; }
+    .connectPanel { display: grid; grid-template-columns: 1.6fr 1fr auto; gap: 10px; padding: 14px 20px; border-bottom: 1px solid #223d50; background: #07131d99; }
+    .connectPanel input { min-width: 0; }
+    .connectPanel input[type="password"] { letter-spacing: .08em; }
+    .connectHint { grid-column: 1 / -1; color: var(--muted); font-size: 12px; }
+    .connectStatus { color: #8ee7ff; font-weight: 750; }
     .chatLog { display: grid; gap: 10px; max-height: 310px; overflow: auto; padding: 16px 20px; }
     .msg { border: 1px solid #263f52; border-radius: 16px; padding: 12px 14px; line-height: 1.45; white-space: pre-wrap; }
     .msg.user { justify-self: end; max-width: 82%; background: #123655; }
@@ -519,8 +563,14 @@ DASHBOARD_HTML = r'''<!doctype html>
         <h2>Ask the OpenData assistant</h2>
         <p>Scoped to the live dashboard snapshot. If the data is not on the page, it should say so.</p>
       </div>
-      <div class="chatBadge">Ollama · server-side key</div>
+      <div class="chatBadge" id="aiStatus">AI not connected</div>
     </div>
+    <form id="connectForm" class="connectPanel">
+      <input id="apiKeyInput" type="password" placeholder="Connect your AI · paste Ollama API key" autocomplete="off" />
+      <input id="modelInput" value="gpt-oss:20b" aria-label="Ollama model" />
+      <button type="submit">Connect AI</button>
+      <div class="connectHint">Demo mode: the key is sent only to this localhost Python server, kept in memory for this run, and never written to disk or shown back.</div>
+    </form>
     <div id="chatLog" class="chatLog">
       <div class="msg assistant">Ask things like: “Which parking looks risky?”, “Which trees need attention?”, or “Summarize this for a visitor.”</div>
     </div>
@@ -538,6 +588,9 @@ const generatedAt = document.getElementById('generatedAt');
 const cardCount = document.getElementById('cardCount');
 const chatLog = document.getElementById('chatLog');
 const chatInput = document.getElementById('chatInput');
+const aiStatus = document.getElementById('aiStatus');
+const apiKeyInput = document.getElementById('apiKeyInput');
+const modelInput = document.getElementById('modelInput');
 let currentSnapshot = null;
 const escapeHtml = (s) => String(s ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 const pct = (v) => {
@@ -594,6 +647,24 @@ function appendMessage(role, text) {
   chatLog.scrollTop = chatLog.scrollHeight;
   return div;
 }
+async function refreshAiStatus() {
+  const res = await fetch('/api/ai-status');
+  const data = await res.json();
+  aiStatus.textContent = data.connected ? `AI connected · ${data.source} · ${data.model}` : 'AI not connected';
+  modelInput.value = data.model || modelInput.value;
+}
+async function connectAi(apiKey, model) {
+  const res = await fetch('/api/connect-ai', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({apiKey, baseUrl: 'https://ollama.com/v1', model})
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'AI connection failed');
+  aiStatus.textContent = `AI connected · ${data.source} · ${data.model}`;
+  apiKeyInput.value = '';
+  appendMessage('assistant', `AI connected for this localhost session using ${data.model}. The key stayed server-side and was not saved.`);
+}
 async function askChat(question) {
   appendMessage('user', question);
   const pending = appendMessage('assistant', 'Thinking against the current OpenData snapshot…');
@@ -606,6 +677,16 @@ async function askChat(question) {
   if (!res.ok) throw new Error(data.error || 'Chat request failed');
   pending.textContent = data.answer + `\n\n— ${data.model}, context ${data.contextGeneratedAt}`;
 }
+document.getElementById('connectForm').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const apiKey = apiKeyInput.value.trim();
+  const model = modelInput.value.trim() || 'gpt-oss:20b';
+  try {
+    await connectAi(apiKey, model);
+  } catch (err) {
+    appendMessage('error', err.message || String(err));
+  }
+});
 document.getElementById('chatForm').addEventListener('submit', async (event) => {
   event.preventDefault();
   const question = chatInput.value.trim();
@@ -619,6 +700,7 @@ document.getElementById('chatForm').addEventListener('submit', async (event) => 
   }
 });
 document.getElementById('refresh').addEventListener('click', loadData);
+refreshAiStatus().catch(() => { aiStatus.textContent = 'AI status unavailable'; });
 loadData().catch(err => {
   cardsEl.innerHTML = `<article class="card"><h2>Dashboard error</h2><pre class="errorText">${escapeHtml(err.stack || err)}</pre></article>`;
 });
@@ -669,17 +751,24 @@ class DashboardHandler(BaseHTTPRequestHandler):
             payload = collect_snapshot(district=district, lat=lat, lon=lon)
             self._send(200, json.dumps(payload, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
             return
+        if parsed.path == "/api/ai-status":
+            self._send(200, json.dumps(ai_status(), ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
+            return
         self._send(404, b"not found", "text/plain; charset=utf-8")
 
     def do_POST(self) -> None:  # noqa: N802 - stdlib hook name
         parsed = urllib.parse.urlparse(self.path)
-        if parsed.path != "/api/chat":
+        if parsed.path not in {"/api/chat", "/api/connect-ai"}:
             self._send(404, b"not found", "text/plain; charset=utf-8")
             return
         try:
             length = int(self.headers.get("Content-Length", "0"))
             body = self.rfile.read(min(length, 65536))
             request = json.loads(body.decode("utf-8"))
+            if parsed.path == "/api/connect-ai":
+                payload = connect_ai(request)
+                self._send(200, json.dumps(payload, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
+                return
             question = str(request.get("question") or "").strip()
             if not question:
                 self._send(400, b'{"error":"question is required"}', "application/json; charset=utf-8")

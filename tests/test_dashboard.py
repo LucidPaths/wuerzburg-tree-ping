@@ -1,8 +1,11 @@
 from wuerzburg_tree_ping.dashboard import (
+    CONNECTED_AI,
     build_chat_messages,
     build_static_html,
     chat_answer_from_response,
+    connect_ai,
     item_dict,
+    normalize_ai_connection,
     ollama_chat_request,
     opendata_context,
     text_card,
@@ -15,6 +18,8 @@ def test_dashboard_html_contains_live_endpoint():
     assert "OpenData Würzburg Possibilities" in html
     assert "/api/snapshot" in html
     assert "/api/chat" in html
+    assert "/api/connect-ai" in html
+    assert "Connect your AI" in html
     assert "Ask the OpenData assistant" in html
     assert "Refresh data" in html
 
@@ -86,6 +91,25 @@ def test_ollama_cloud_v1_uses_openai_compatible_chat_completions(monkeypatch):
     assert payload["model"] == "demo-model"
     assert payload["temperature"] == 0.2
     assert "options" not in payload
+
+
+def test_connected_ai_overrides_environment_without_exposing_key(monkeypatch):
+    monkeypatch.setenv("OLLAMA_BASE_URL", "https://wrong.example/v1")
+    config = normalize_ai_connection({"apiKey": "secret-key", "baseUrl": "https://ollama.com/v1", "model": "demo-model"})
+    api_url, payload = ollama_chat_request("What is free?", sample_snapshot(), config=config)
+    assert api_url == "https://ollama.com/v1/chat/completions"
+    assert payload["model"] == "demo-model"
+    assert "secret-key" not in str(payload)
+
+
+def test_connect_ai_keeps_key_in_memory_but_returns_redacted_status(monkeypatch):
+    monkeypatch.delenv("OLLAMA_API_KEY", raising=False)
+    CONNECTED_AI.clear()
+    status = connect_ai({"apiKey": "secret-key", "baseUrl": "https://ollama.com/v1", "model": "demo-model"})
+    assert CONNECTED_AI["api_key"] == "secret-key"
+    assert status == {"connected": True, "source": "browser", "baseUrl": "https://ollama.com/v1", "model": "demo-model"}
+    assert "secret-key" not in str(status)
+    CONNECTED_AI.clear()
 
 
 def test_native_ollama_uses_api_chat_payload(monkeypatch):

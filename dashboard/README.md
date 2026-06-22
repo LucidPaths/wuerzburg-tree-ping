@@ -62,7 +62,9 @@ python dashboard/app.py
 
 The key stays server-side. The browser only calls local `/api/chat`; it never receives the key.
 
-If `OLLAMA_API_KEY` is absent, the dashboard tries local Ollama at `http://127.0.0.1:11434/api/chat`.
+For presentation mode, the page also has a **Connect your AI** form. Paste the Ollama API key there instead of setting environment variables; the browser sends it to the localhost Python server once, the server keeps it only in process memory, and the key is never written to disk or echoed back.
+
+If `OLLAMA_API_KEY` is absent and no browser key was connected, the dashboard tries local Ollama at `http://127.0.0.1:11434/api/chat`.
 
 If port `8765` is already in use, run the dashboard on another port:
 
