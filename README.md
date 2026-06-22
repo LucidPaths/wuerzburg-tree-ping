@@ -1,17 +1,10 @@
-# Würzburg Tree Ping
+# Würzburg OpenData Pings
 
-Tiny demo monitor for Würzburg OpenData tree, soil-moisture, and water-level sensors.
+Small demo scripts that turn Würzburg OpenData into useful Telegram/Hermes pings.
 
-It supports two modes:
+Clean boundary: **Python does truth; Hermes does scheduling, interpretation, and delivery.**
 
-1. **Plain Python + Telegram bot** — run the script yourself and send directly through Telegram.
-2. **Hermes cronjob** — let Hermes schedule the script and deliver non-empty output to Telegram/Discord.
-
-The clean boundary is: **Python does truth; Hermes does scheduling, interpretation, and delivery.**
-
-## Data sources
-
-Verified OpenData portal: <https://opendata.wuerzburg.de/>
+Verified portal: <https://opendata.wuerzburg.de/>
 
 API base:
 
@@ -19,14 +12,12 @@ API base:
 https://opendata.wuerzburg.de/api/explore/v2.1/catalog/datasets
 ```
 
-Datasets used:
+## Usecases
 
-| Dataset ID | Purpose |
-| --- | --- |
-| `sls-klimabaeume` | Würzburger Klimabäume soil moisture / VWC |
-| `tektelic-kiwi-agriculture-sensor_klimagarten-ochsenfurt` | Garden soil moisture at 30 cm / 100 cm |
-| `milesight-em500_klimagarten-ochsenfurt` | Water barrel fill level |
-| `barani-helix_klimagarten-ochsenfurt` | Weather context, currently documented for extension |
+| Folder | Demo | Datasets |
+| --- | --- | --- |
+| [`usecases/tree-watering-ping`](usecases/tree-watering-ping) | Watches tree/garden soil moisture and water storage; pings when watering review is needed. | `sls-klimabaeume`, `tektelic-kiwi-agriculture-sensor_klimagarten-ochsenfurt`, `milesight-em500_klimagarten-ochsenfurt` |
+| [`usecases/parking-ping`](usecases/parking-ping) | Watches parking facility status; pings occupied garages and likely alternatives. | `parkplatzdaten_wuerzburg` |
 
 ## Quick start
 
@@ -34,17 +25,29 @@ Datasets used:
 git clone https://github.com/LucidPaths/wuerzburg-tree-ping.git
 cd wuerzburg-tree-ping
 python -m venv .venv
-. .venv/bin/activate  # Windows git-bash
+. .venv/bin/activate  # Windows git-bash / Linux / macOS
 pip install -e .
-wuerzburg-tree-ping
 ```
 
-No output means no alert. That is intentional: cron can stay quiet when everything is fine.
+Run the two demos:
+
+```bash
+wuerzburg-tree-ping
+wuerzburg-parking-ping
+```
+
+Or run by folder:
+
+```bash
+python usecases/tree-watering-ping/tree_watering_ping.py
+python usecases/parking-ping/parking_ping.py
+```
 
 JSON/debug mode:
 
 ```bash
 wuerzburg-tree-ping --json
+wuerzburg-parking-ping --json
 ```
 
 ## Telegram direct mode
@@ -55,6 +58,7 @@ Create a Telegram bot with BotFather, get the chat ID, then:
 export TELEGRAM_BOT_TOKEN="<bot-token>"
 export TELEGRAM_CHAT_ID="<chat-id>"
 wuerzburg-tree-ping --send-telegram
+wuerzburg-parking-ping --send-telegram
 ```
 
 Secrets stay in environment variables. Do **not** commit them.
@@ -63,34 +67,54 @@ Secrets stay in environment variables. Do **not** commit them.
 
 Recommended for a local Hermes demo because Hermes already has gateway delivery.
 
-Create a cron job that runs the script only, and sends stdout when alerts exist:
+Script-only watchdog shape:
 
 ```bash
-hermes cron create 'every 1h'
+cd /path/to/wuerzburg-tree-ping && python usecases/tree-watering-ping/tree_watering_ping.py
+cd /path/to/wuerzburg-tree-ping && python usecases/parking-ping/parking_ping.py
 ```
 
-Prompt/script shape:
+If creating from inside Hermes with the `cronjob` tool, use `no_agent=True` for a pure watchdog:
 
-```text
-Run the Würzburg tree ping monitor. Deliver any non-empty output as the alert. Stay silent if stdout is empty.
-```
+- empty stdout = silent
+- non-empty stdout = delivered
+- non-zero exit = error alert
 
-Script:
+LLM-enhanced mode is also viable: let the script emit measured facts, then ask Hermes to rewrite them as a concise human ping.
 
-```bash
-cd /path/to/wuerzburg-tree-ping && python -m wuerzburg_tree_ping.cli
-```
+More detail: [`docs/hermes-cron.md`](docs/hermes-cron.md)
 
-If creating from inside Hermes with the `cronjob` tool, use `no_agent=True` for a pure watchdog. Empty stdout = silent, non-empty stdout = delivered.
+## Other easy OpenData demo candidates found
 
-## Example ping
+I checked the portal catalog and these are good next-usecase candidates:
+
+| Dataset | Why it is easy |
+| --- | --- |
+| `fahrradzaehlung-tagesdaten-alle-zaehlstationen` | Daily bike counts by station; easy “which route is busiest?” ping. |
+| `passantenzaehlung_tagesdaten` / `passantenzaehlung_stundendaten` | Pedestrian counts for city-center locations; easy downtown activity pulse. |
+| `abfallkalender-wuerzburg` | Waste pickup dates by district; easy reminder bot, but needs district selection. |
+| `barrierefreie-toiletten-im-stadtgebiet-wuerzburg` | Accessibility/location helper; easy “nearest public toilet” style demo if user location is supplied. |
+| `eventfeed` | ZDI event feed; easy “upcoming startup/tech events” digest. |
+| `fahrradstellplaetze-stadt-wuerzburg` | Bike parking / e-bike charging / carsharing locations; easy map/search helper. |
+
+Best next demo after parking: **bike counter pulse**. It has simple numeric data and a natural AI explanation layer: “where is cycling traffic highest today?”
+
+## Example pings
 
 ```text
 🌳 Würzburg OpenData watering ping (2026-06-22 09:30 UTC)
 
 🔴 Dry soil: Ahorn
 Soil moisture at 30 cm is 3.5%, 100 cm: 3.8%, air temp: 29.3°C. Recommend watering review.
-Latest reading: 2026-06-22T09:19:54+00:00
+```
+
+```text
+🅿️ Würzburg parking ping (2026-06-22 11:52 UTC)
+Avoid / check before driving:
+- Würzburg Juliusspital: belegt
+Likely available options:
+- Würzburg Marktgarage: frei
+- Würzburg PH Mitte: frei
 ```
 
 ## Development
@@ -98,6 +122,7 @@ Latest reading: 2026-06-22T09:19:54+00:00
 ```bash
 python -m pytest
 python -m wuerzburg_tree_ping.cli --json
+python -m wuerzburg_tree_ping.parking --json
 ```
 
 ## Notes for the event
@@ -105,9 +130,9 @@ python -m wuerzburg_tree_ping.cli --json
 Good demo script:
 
 1. Show the public OpenData source.
-2. Show the dataset IDs and the live JSON fields.
-3. Run the local monitor.
+2. Show the dataset IDs and live JSON fields.
+3. Run a local monitor.
 4. Show the Telegram/Hermes ping.
-5. Ask Hermes: “why did this trigger?” or “show me the driest locations.”
+5. Ask Hermes: “why did this trigger?” or “what should I do next?”
 
-This keeps the demo grounded: AI explains and prioritizes, but the municipal data decides.
+This keeps the demo grounded: AI explains and prioritizes, but municipal data decides.

@@ -17,6 +17,7 @@ dependencies = []
 
 [project.scripts]
 wuerzburg-tree-ping = "wuerzburg_tree_ping.cli:main"
+wuerzburg-parking-ping = "wuerzburg_tree_ping.parking:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
