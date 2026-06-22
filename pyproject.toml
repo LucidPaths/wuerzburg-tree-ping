@@ -1,0 +1,24 @@
+[project]
+name = "wuerzburg-tree-ping"
+version = "0.1.0"
+description = "Tiny Würzburg OpenData tree and water sensor monitor with Telegram and Hermes cron support."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "LucidPaths" }]
+keywords = ["opendata", "wuerzburg", "telegram", "hermes", "sensors", "trees"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Environment :: Console",
+  "Topic :: Scientific/Engineering :: Atmospheric Science",
+]
+dependencies = []
+
+[project.scripts]
+wuerzburg-tree-ping = "wuerzburg_tree_ping.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-q"
