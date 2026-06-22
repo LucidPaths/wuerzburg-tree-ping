@@ -90,7 +90,25 @@ For an “AI demo” mode, keep the script as source of truth and ask Hermes to 
 
 ## Dashboard / visualizer
 
-Generate a dependency-free static dashboard snapshot:
+Run the live localhost dashboard:
+
+```bash
+python dashboard/app.py
+```
+
+Open:
+
+```text
+http://127.0.0.1:8765/
+```
+
+It renders all usecases into one demo surface and refreshes through a local JSON endpoint:
+
+```text
+/api/snapshot
+```
+
+Static fallback snapshot:
 
 ```bash
 python dashboard/generate_dashboard.py
