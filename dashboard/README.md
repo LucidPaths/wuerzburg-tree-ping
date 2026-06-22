@@ -34,6 +34,44 @@ The browser calls:
 
 That reruns the local Python collectors against `opendata.wuerzburg.de` and redraws the cards.
 
+## OpenData chatbox
+
+The dashboard also exposes a small Ollama-backed chatbox scoped to the current dashboard snapshot.
+
+Set one of these on the machine running the dashboard:
+
+```bash
+export OLLAMA_API_KEY="<your-key>"
+export OLLAMA_BASE_URL="https://ollama.com/v1"  # Ollama Cloud / OpenAI-compatible endpoint
+export OLLAMA_MODEL="gpt-oss:20b"
+```
+
+On Windows CMD:
+
+```bat
+set OLLAMA_API_KEY=<your-key>
+set OLLAMA_BASE_URL=https://ollama.com/v1
+set OLLAMA_MODEL=gpt-oss:20b
+```
+
+Then run:
+
+```bash
+python dashboard/app.py
+```
+
+The key stays server-side. The browser only calls local `/api/chat`; it never receives the key.
+
+If `OLLAMA_API_KEY` is absent, the dashboard tries local Ollama at `http://127.0.0.1:11434/api/chat`.
+
+If port `8765` is already in use, run the dashboard on another port:
+
+```bash
+python dashboard/app.py --port 8870
+```
+
+Then open `http://127.0.0.1:8870/`.
+
 Optional controls:
 
 - `district` filters the waste calendar, e.g. `Grombühl`

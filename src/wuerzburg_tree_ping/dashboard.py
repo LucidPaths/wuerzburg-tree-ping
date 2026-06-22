@@ -7,9 +7,11 @@ from pathlib import Path
 from typing import Any, Callable
 import argparse
 import json
+import os
 import sys
 import traceback
 import urllib.parse
+import urllib.request
 
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src"
@@ -235,6 +237,125 @@ def collect_snapshot(*, district: str | None = None, lat: float = toilets.DEFAUL
     }
 
 
+MAX_CHAT_CHARS = 12000
+
+
+def load_env_file(path: Path | None = None) -> None:
+    """Load simple KEY=VALUE lines without overriding existing environment variables."""
+    env_paths = [path] if path else [ROOT / ".env", Path.home() / "AppData" / "Local" / "hermes" / ".env"]
+    for env_path in [p for p in env_paths if p is not None]:
+        if not env_path.exists():
+            continue
+        for raw_line in env_path.read_text(encoding="utf-8").splitlines():
+            line = raw_line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            key, value = line.split("=", 1)
+            key = key.strip()
+            value = value.strip().strip('"').strip("'")
+            if key and key not in os.environ:
+                os.environ[key] = value
+
+
+def opendata_context(snapshot: dict[str, Any]) -> str:
+    rows: list[str] = [
+        f"Generated: {snapshot.get('generatedAt')}",
+        f"Source: {snapshot.get('source')}",
+    ]
+    for card in snapshot.get("cards", []):
+        rows.append(f"\n## {card.get('title')} ({card.get('key')})")
+        rows.append(f"Purpose: {card.get('pitch')}")
+        rows.append(f"Datasets: {', '.join(card.get('datasets') or [])}")
+        rows.append(f"Metric: {card.get('value')} {card.get('metricLabel')} | Status: {card.get('status')}")
+        if card.get("secondary"):
+            rows.append(f"Secondary: {card['secondary'].get('value')} {card['secondary'].get('label')}")
+        for item in (card.get("items") or [])[:8]:
+            rows.append(
+                "- "
+                + str(item.get("title", "untitled"))
+                + ": "
+                + str(item.get("body") or item.get("severity") or "")
+                + (f" | timestamp: {item.get('timestamp')}" if item.get("timestamp") else "")
+                + (f" | url: {item.get('url')}" if item.get("url") else "")
+            )
+    text = "\n".join(rows)
+    return text[:MAX_CHAT_CHARS]
+
+
+def build_chat_messages(question: str, snapshot: dict[str, Any]) -> list[dict[str, str]]:
+    return [
+        {
+            "role": "system",
+            "content": (
+                "You are the OpenData Würzburg dashboard assistant. Answer only from the dashboard context below. "
+                "Be concise, practical, and honest. If the context does not contain the answer, say that the dashboard does not show it. "
+                "Do not invent live values, locations, timestamps, routes, or policy claims. Mention that values come from opendata.wuerzburg.de when useful."
+            ),
+        },
+        {"role": "user", "content": f"Dashboard context:\n{opendata_context(snapshot)}\n\nQuestion: {question}"},
+    ]
+
+
+def ollama_chat_request(question: str, snapshot: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    """Return the chat endpoint and payload for native Ollama or OpenAI-compatible Ollama Cloud."""
+    explicit_api_url = (os.getenv("OLLAMA_API_URL") or "").rstrip("/")
+    base_url = (os.getenv("OLLAMA_BASE_URL") or "").rstrip("/")
+    model = os.getenv("OLLAMA_MODEL", "gpt-oss:20b")
+    messages = build_chat_messages(question, snapshot)
+
+    if explicit_api_url:
+        api_url = explicit_api_url
+    elif base_url.endswith("/v1") or "/v1/" in base_url:
+        api_url = f"{base_url}/chat/completions"
+    elif base_url:
+        api_url = base_url if base_url.endswith("/api/chat") else f"{base_url}/api/chat"
+    elif os.getenv("OLLAMA_API_KEY"):
+        api_url = "https://ollama.com/api/chat"
+    else:
+        api_url = "http://127.0.0.1:11434/api/chat"
+
+    if "/chat/completions" in api_url:
+        return api_url, {
+            "model": model,
+            "messages": messages,
+            "stream": False,
+            "temperature": 0.2,
+        }
+    return api_url, {
+        "model": model,
+        "messages": messages,
+        "stream": False,
+        "options": {"temperature": 0.2},
+    }
+
+
+def chat_answer_from_response(result: dict[str, Any]) -> str:
+    answer = (result.get("message") or {}).get("content") or result.get("response")
+    if not answer and result.get("choices"):
+        answer = ((result["choices"][0] or {}).get("message") or {}).get("content")
+    if not answer:
+        raise RuntimeError(f"Ollama API response did not contain an answer: {result!r}")
+    return str(answer).strip()
+
+
+def chat_with_ollama(question: str, snapshot: dict[str, Any]) -> dict[str, Any]:
+    load_env_file()
+    api_key = os.getenv("OLLAMA_API_KEY")
+    api_url, payload = ollama_chat_request(question, snapshot)
+    model = str(payload.get("model") or os.getenv("OLLAMA_MODEL", "gpt-oss:20b"))
+    headers = {"Content-Type": "application/json", "User-Agent": "opendata-wuerzburg-dashboard/0.3"}
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    req = urllib.request.Request(api_url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=90) as response:
+            result = json.load(response)
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode("utf-8", "replace")[:800]
+        raise RuntimeError(f"Ollama API returned HTTP {exc.code}: {body}") from exc
+    return {"answer": chat_answer_from_response(result), "model": model, "contextGeneratedAt": snapshot.get("generatedAt")}
+
+
 DASHBOARD_HTML = r'''<!doctype html>
 <html lang="en">
 <head>
@@ -348,6 +469,25 @@ DASHBOARD_HTML = r'''<!doctype html>
     .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 16px currentColor; }
     .status.critical .dot, .status.error .dot { background: var(--critical); }
     .status.watch .dot { background: var(--watch); }
+    .chatPanel {
+      margin: 0 clamp(18px, 4vw, 56px) 28px;
+      border: 1px solid #31536a;
+      background: linear-gradient(180deg, #101f2dcc, #08121bdd);
+      border-radius: 26px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .chatHead { display: flex; justify-content: space-between; gap: 16px; padding: 18px 20px; border-bottom: 1px solid #223d50; }
+    .chatHead h2 { margin: 0 0 6px; }
+    .chatHead p { margin: 0; color: #bdd0df; }
+    .chatBadge { color: #8ee7ff; font-size: 12px; text-transform: uppercase; letter-spacing: .1em; white-space: nowrap; }
+    .chatLog { display: grid; gap: 10px; max-height: 310px; overflow: auto; padding: 16px 20px; }
+    .msg { border: 1px solid #263f52; border-radius: 16px; padding: 12px 14px; line-height: 1.45; white-space: pre-wrap; }
+    .msg.user { justify-self: end; max-width: 82%; background: #123655; }
+    .msg.assistant { justify-self: start; max-width: 88%; background: #08131c; }
+    .msg.error { background: #31121b; border-color: #783248; color: #ffd5dd; }
+    .chatForm { display: flex; gap: 10px; padding: 14px 20px 20px; }
+    .chatForm input { flex: 1; }
     .errorText { color: #ffb4c0; white-space: pre-wrap; }
     footer { padding: 0 clamp(18px, 4vw, 56px) 35px; color: var(--muted); }
     @media (max-width: 1100px) { .card, .card:nth-child(1), .card:nth-child(2) { grid-column: span 6; } }
@@ -373,6 +513,22 @@ DASHBOARD_HTML = r'''<!doctype html>
     <button id="refresh">Refresh data</button>
   </section>
   <main id="cards"></main>
+  <section class="chatPanel">
+    <div class="chatHead">
+      <div>
+        <h2>Ask the OpenData assistant</h2>
+        <p>Scoped to the live dashboard snapshot. If the data is not on the page, it should say so.</p>
+      </div>
+      <div class="chatBadge">Ollama · server-side key</div>
+    </div>
+    <div id="chatLog" class="chatLog">
+      <div class="msg assistant">Ask things like: “Which parking looks risky?”, “Which trees need attention?”, or “Summarize this for a visitor.”</div>
+    </div>
+    <form id="chatForm" class="chatForm">
+      <input id="chatInput" placeholder="Ask about the current OpenData snapshot…" autocomplete="off" />
+      <button type="submit">Ask</button>
+    </form>
+  </section>
   <footer>
     Source: <a href="https://opendata.wuerzburg.de/" style="color:#8ee7ff">opendata.wuerzburg.de</a>. Refresh reruns the local Python collectors; no fake sample data.
   </footer>
@@ -380,6 +536,9 @@ DASHBOARD_HTML = r'''<!doctype html>
 const cardsEl = document.getElementById('cards');
 const generatedAt = document.getElementById('generatedAt');
 const cardCount = document.getElementById('cardCount');
+const chatLog = document.getElementById('chatLog');
+const chatInput = document.getElementById('chatInput');
+let currentSnapshot = null;
 const escapeHtml = (s) => String(s ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
 const pct = (v) => {
   const n = Number(String(v).replace(/[^0-9.-]/g,''));
@@ -422,10 +581,43 @@ async function loadData() {
   if (lon) params.set('lon', lon);
   const res = await fetch('/api/snapshot?' + params.toString());
   const data = await res.json();
+  currentSnapshot = data;
   generatedAt.textContent = 'Generated ' + data.generatedAt;
   cardCount.textContent = `${data.cards.length} live cards`;
   cardsEl.innerHTML = data.cards.map(renderCard).join('');
 }
+function appendMessage(role, text) {
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+  div.textContent = text;
+  chatLog.appendChild(div);
+  chatLog.scrollTop = chatLog.scrollHeight;
+  return div;
+}
+async function askChat(question) {
+  appendMessage('user', question);
+  const pending = appendMessage('assistant', 'Thinking against the current OpenData snapshot…');
+  const res = await fetch('/api/chat', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({question, snapshot: currentSnapshot})
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Chat request failed');
+  pending.textContent = data.answer + `\n\n— ${data.model}, context ${data.contextGeneratedAt}`;
+}
+document.getElementById('chatForm').addEventListener('submit', async (event) => {
+  event.preventDefault();
+  const question = chatInput.value.trim();
+  if (!question) return;
+  chatInput.value = '';
+  try {
+    if (!currentSnapshot) await loadData();
+    await askChat(question);
+  } catch (err) {
+    appendMessage('error', err.message || String(err));
+  }
+});
 document.getElementById('refresh').addEventListener('click', loadData);
 loadData().catch(err => {
   cardsEl.innerHTML = `<article class="card"><h2>Dashboard error</h2><pre class="errorText">${escapeHtml(err.stack || err)}</pre></article>`;
@@ -478,6 +670,26 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self._send(200, json.dumps(payload, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
             return
         self._send(404, b"not found", "text/plain; charset=utf-8")
+
+    def do_POST(self) -> None:  # noqa: N802 - stdlib hook name
+        parsed = urllib.parse.urlparse(self.path)
+        if parsed.path != "/api/chat":
+            self._send(404, b"not found", "text/plain; charset=utf-8")
+            return
+        try:
+            length = int(self.headers.get("Content-Length", "0"))
+            body = self.rfile.read(min(length, 65536))
+            request = json.loads(body.decode("utf-8"))
+            question = str(request.get("question") or "").strip()
+            if not question:
+                self._send(400, b'{"error":"question is required"}', "application/json; charset=utf-8")
+                return
+            snapshot = request.get("snapshot") if isinstance(request.get("snapshot"), dict) else collect_snapshot()
+            payload = chat_with_ollama(question[:1000], snapshot)
+            self._send(200, json.dumps(payload, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
+        except Exception as exc:
+            payload = {"error": str(exc)}
+            self._send(500, json.dumps(payload, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
 
 
 def run_server(host: str = DEFAULT_HOST, port: int = DEFAULT_PORT) -> None:

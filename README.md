@@ -102,11 +102,14 @@ Open:
 http://127.0.0.1:8765/
 ```
 
-It renders all usecases into one demo surface and refreshes through a local JSON endpoint:
+It renders all usecases into one demo surface, adds a scoped OpenData chatbox, and refreshes through local endpoints:
 
 ```text
 /api/snapshot
+/api/chat
 ```
+
+Set `OLLAMA_API_KEY` on the machine running the dashboard to enable the chatbox. For Ollama Cloud/OpenAI-compatible mode, also set `OLLAMA_BASE_URL=https://ollama.com/v1`. The key stays server-side. If port `8765` is busy, run `python dashboard/app.py --port 8870` and open `http://127.0.0.1:8870/`.
 
 Static fallback snapshot:
 
