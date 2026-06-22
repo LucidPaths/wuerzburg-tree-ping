@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OpenData Würzburg Possibilities</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; background: #101418; color: #eef3f8; }
+    header { padding: 32px; background: linear-gradient(135deg, #0f766e, #1d4ed8); }
+    main { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; padding: 16px; }
+    .card { background: #18212b; border: 1px solid #2c3a47; border-radius: 16px; padding: 18px; box-shadow: 0 8px 24px #0005; }
+    h1 { margin: 0 0 8px; }
+    h2 { margin-top: 0; }
+    code { color: #93c5fd; }
+    pre { white-space: pre-wrap; background: #0b1117; border-radius: 12px; padding: 12px; overflow: auto; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>OpenData Würzburg Possibilities</h1>
+    <p>Assortment of small simple OpenData demos: scripts, Telegram staging, Hermes cron, and visual pings.</p>
+  </header>
+  <main>
+    <section class="card">
+      <h2>Tree watering</h2>
+      <p><code>usecases/tree-watering-ping</code></p>
+      <pre>🌳 Würzburg OpenData watering ping (2026-06-22 10:12 UTC)
+
+🔴 Dry soil: Ahorn
+Soil moisture at 30 cm is 3.5%, 100 cm: 3.8%, air temp: 31.3°C. Recommend watering review.
+Latest reading: 2026-06-22T10:04:54+00:00
+
+🔴 Dry soil: Blumenesche
+Soil moisture at 30 cm is 2.6%, 100 cm: 2.1%, air temp: 50.9°C. Recommend watering review.
+Latest reading: 2026-06-22T09:59:36+00:00
+
+🔴 Dry soil: Wasserbedürftiges_Staudenbeet
+Soil moisture at 30 cm is 11.4%, 100 cm: 23.6%, air temp: 39.0°C. Recommend watering review.
+Latest reading: 2026-06-22T09:58:26+00:00</pre>
+    </section>
+    
+
+    <section class="card">
+      <h2>Parking</h2>
+      <p><code>usecases/parking-ping</code></p>
+      <pre>🅿️ Würzburg parking ping (2026-06-22 10:12 UTC)
+Avoid / check before driving:
+- Würzburg Juliusspital: belegt (2026-06-22T12:10:01+00:00)
+Likely available options:
+- Würzburg PH Bahnhof: frei
+- Würzburg Marktgarage: frei
+- Würzburg Nautiland: frei
+- Würzburg PH Mitte: frei
+- Würzburg Kranengarage: frei</pre>
+    </section>
+    
+
+    <section class="card">
+      <h2>Bike counter</h2>
+      <p><code>usecases/bike-counter-pulse</code></p>
+      <pre>🚲 Würzburg bike counter pulse (2026-06-22 10:12 UTC)
+
+- Greinberg Richtung Innenstadt
+  1,465 counted bicycles on 2026-06-20.
+  Latest: 2026-06-20
+
+- Röntgenring
+  1,040 counted bicycles on 2026-06-20.
+  Latest: 2026-06-20
+
+- Greinberg Richtung Lindleinsmühle, Versbach
+  881 counted bicycles on 2026-06-20.
+  Latest: 2026-06-20
+
+- Heidingsfeld Überquerung Mergentheimer Str.
+  736 counted bicycles on 2026-06-20.
+  Latest: 2026-06-20
+
+- Greinberg Richtung Lengfeld
+  632 counted bicycles on 2026-06-20.
+  Latest: 2026-06-20</pre>
+    </section>
+    
+
+    <section class="card">
+      <h2>Pedestrian pulse</h2>
+      <p><code>usecases/pedestrian-downtown-pulse</code></p>
+      <pre>🚶 Würzburg downtown activity pulse (2026-06-22 10:12 UTC)
+
+- Kaiserstraße
+  11,053 pedestrians; weather partly-cloudy-day, temp 17.0°C.
+  Latest: 2026-05-17
+
+- Schönbornstraße
+  9,526 pedestrians; weather partly-cloudy-day, temp 17.0°C.
+  Latest: 2026-05-17
+
+- Spiegelstraße
+  8,788 pedestrians; weather partly-cloudy-day, temp 17.0°C.
+  Latest: 2026-05-17</pre>
+    </section>
+    
+
+    <section class="card">
+      <h2>Waste pickup</h2>
+      <p><code>usecases/waste-pickup-reminder</code></p>
+      <pre>🗑️ Würzburg waste pickup reminder (2026-06-22 10:12 UTC)
+
+- 2026-12-11 — Bioabfall (Sanderau)
+  Bioabfall Sanderau
+  Latest: 2026-12-11
+
+- 2026-12-14 — Gelber Sack (Frauenland)
+  Gelber Sack vierzehntägig Frauenland
+  Latest: 2026-12-14
+
+- 2026-12-14 — Papier (Frauenland)
+  Papier vierzehntägig Frauenland
+  Latest: 2026-12-14
+
+- 2026-12-14 — Bioabfall (Rottenbauer)
+  Bioabfall Rottenbauer
+  Latest: 2026-12-14
+
+- 2026-12-14 — Bioabfall (Steinbachtal)
+  Bioabfall Steinbachtal
+  Latest: 2026-12-14
+
+- 2026-12-14 — Restmüll (Steinbachtal)
+  Restmüll vierzehntägig Steinbachtal
+  Latest: 2026-12-14
+
+- 2026-12-15 — Gelber Sack (Altstadt)
+  Gelber Sack vierzehntägig Altstadt ohne Mainviertel
+  Latest: 2026-12-15
+
+- 2026-12-15 — Papier (Altstadt)
+  Papier  vierzehntägig Altstadt ohne Mainviertel
+  Latest: 2026-12-15</pre>
+    </section>
+    
+
+    <section class="card">
+      <h2>Accessible toilets</h2>
+      <p><code>usecases/accessible-toilets-helper</code></p>
+      <pre>♿ Nearest accessible toilets (2026-06-22 10:12 UTC)
+
+- Marktgarage (2. UG)
+  0.07 km away. Type: Barrierefreie WC-Anlage. Die Toilette ist zwischen 07:00 und 22:00 Uhr geöffnet. Euro-WC-Schlüssel notwendig; Schlüssel erhältlich im Bürgerbüro (Rathaus)Name der Einrichtung: Öffentliches barrierefreies W
+
+- Marktgarage (2. UG)
+  0.07 km away. Type: Barrierefreie WC-Anlage. Die Toilette ist zwischen 07:00 und 22:00 Uhr geöffnet. Euro-WC-Schlüssel notwendig; Schlüssel erhältlich im Bürgerbüro (Rathaus)Name der Einrichtung:   Öffentliches barrierefreies
+
+- Cafe Schönborn
+  0.08 km away. Type: Nette Toilette. täglich 8:30 - 24:00 Uhr
+
+- Sternplatz
+  0.09 km away. Type: Weitere Toilette. Mo - Sa 9:00 - 18:00 Uhr
+
+- Hugendubel
+  0.09 km away. Type: Barrierefreie WC-Anlage. Zugang ohne Euro-Schlüssel möglich</pre>
+    </section>
+    
+
+    <section class="card">
+      <h2>ZDI events</h2>
+      <p><code>usecases/zdi-event-digest</code></p>
+      <pre>📅 Würzburg ZDI event digest (2026-06-22 10:12 UTC)
+
+- Sommerfest 3GZ
+  No description in feed
+  Latest: 2026-07-23T14:00:00+00:00
+  Link: https://cloud.gruenderzentren-wuerzburg.de/remote.php/dav/public-calendars/Q3f96zZ9Dgd7seFb?export</pre>
+    </section>
+    </main>
+</body>
+</html>

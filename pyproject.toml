@@ -18,6 +18,11 @@ dependencies = []
 [project.scripts]
 wuerzburg-tree-ping = "wuerzburg_tree_ping.cli:main"
 wuerzburg-parking-ping = "wuerzburg_tree_ping.parking:main"
+wuerzburg-bike-ping = "wuerzburg_tree_ping.bike:main"
+wuerzburg-pedestrian-ping = "wuerzburg_tree_ping.pedestrian:main"
+wuerzburg-waste-ping = "wuerzburg_tree_ping.waste:main"
+wuerzburg-toilets-ping = "wuerzburg_tree_ping.toilets:main"
+wuerzburg-events-ping = "wuerzburg_tree_ping.events:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

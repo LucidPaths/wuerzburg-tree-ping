@@ -1,6 +1,6 @@
-# Würzburg OpenData Pings
+# OpenData Würzburg Possibilities
 
-Small demo scripts that turn Würzburg OpenData into useful Telegram/Hermes pings.
+TL;DR: an assortment of small, simple Würzburg OpenData solutions — each folder is a self-contained demo with a Python script, Telegram staging, Hermes cron/agent notes, and a path to visualization.
 
 Clean boundary: **Python does truth; Hermes does scheduling, interpretation, and delivery.**
 
@@ -14,125 +14,107 @@ https://opendata.wuerzburg.de/api/explore/v2.1/catalog/datasets
 
 ## Usecases
 
-| Folder | Demo | Datasets |
+| Folder | Demo | Dataset(s) |
 | --- | --- | --- |
-| [`usecases/tree-watering-ping`](usecases/tree-watering-ping) | Watches tree/garden soil moisture and water storage; pings when watering review is needed. | `sls-klimabaeume`, `tektelic-kiwi-agriculture-sensor_klimagarten-ochsenfurt`, `milesight-em500_klimagarten-ochsenfurt` |
-| [`usecases/parking-ping`](usecases/parking-ping) | Watches parking facility status; pings occupied garages and likely alternatives. | `parkplatzdaten_wuerzburg` |
+| [`usecases/tree-watering-ping`](usecases/tree-watering-ping) | Tree/garden soil moisture and water storage alert. | `sls-klimabaeume`, `tektelic-kiwi-agriculture-sensor_klimagarten-ochsenfurt`, `milesight-em500_klimagarten-ochsenfurt` |
+| [`usecases/parking-ping`](usecases/parking-ping) | Parking garage status and alternatives. | `parkplatzdaten_wuerzburg` |
+| [`usecases/bike-counter-pulse`](usecases/bike-counter-pulse) | Busiest bike counter stations. | `fahrradzaehlung-tagesdaten-alle-zaehlstationen` |
+| [`usecases/pedestrian-downtown-pulse`](usecases/pedestrian-downtown-pulse) | Downtown pedestrian activity pulse. | `passantenzaehlung_tagesdaten` |
+| [`usecases/waste-pickup-reminder`](usecases/waste-pickup-reminder) | Waste pickup reminders by district. | `abfallkalender-wuerzburg` |
+| [`usecases/accessible-toilets-helper`](usecases/accessible-toilets-helper) | Nearest accessible toilets from a location. | `barrierefreie-toiletten-im-stadtgebiet-wuerzburg` |
+| [`usecases/zdi-event-digest`](usecases/zdi-event-digest) | ZDI/startup event digest. | `eventfeed` |
 
 ## Quick start
 
 ```bash
-git clone https://github.com/LucidPaths/wuerzburg-tree-ping.git
-cd wuerzburg-tree-ping
+git clone https://github.com/LucidPaths/OpenDataWuerzburg-Possibilities.git
+cd OpenDataWuerzburg-Possibilities
 python -m venv .venv
 . .venv/bin/activate  # Windows git-bash / Linux / macOS
 pip install -e .
 ```
 
-Run the two demos:
-
-```bash
-wuerzburg-tree-ping
-wuerzburg-parking-ping
-```
-
-Or run by folder:
+Run scripts directly:
 
 ```bash
 python usecases/tree-watering-ping/tree_watering_ping.py
 python usecases/parking-ping/parking_ping.py
+python usecases/bike-counter-pulse/bike_counter_pulse.py
+python usecases/pedestrian-downtown-pulse/pedestrian_downtown_pulse.py
+python usecases/waste-pickup-reminder/waste_pickup_reminder.py --district Grombühl
+python usecases/accessible-toilets-helper/accessible_toilets_helper.py --lat 49.7939 --lon 9.9300
+python usecases/zdi-event-digest/zdi_event_digest.py
 ```
 
-JSON/debug mode:
+Or use installed commands:
 
 ```bash
-wuerzburg-tree-ping --json
-wuerzburg-parking-ping --json
+wuerzburg-tree-ping
+wuerzburg-parking-ping
+wuerzburg-bike-ping
+wuerzburg-pedestrian-ping
+wuerzburg-waste-ping --district Grombühl
+wuerzburg-toilets-ping --lat 49.7939 --lon 9.9300
+wuerzburg-events-ping
 ```
 
-## Telegram direct mode
+## Telegram staging
 
-Create a Telegram bot with BotFather, get the chat ID, then:
+Telegram support is staged for every usecase. Set credentials when you have a bot/chat target:
 
 ```bash
 export TELEGRAM_BOT_TOKEN="<bot-token>"
 export TELEGRAM_CHAT_ID="<chat-id>"
-wuerzburg-tree-ping --send-telegram
-wuerzburg-parking-ping --send-telegram
+python usecases/parking-ping/parking_ping.py --send-telegram
 ```
 
 Secrets stay in environment variables. Do **not** commit them.
 
-## Hermes cron mode
+## Hermes cron / agent setup
 
-Recommended for a local Hermes demo because Hermes already has gateway delivery.
+Every usecase folder has a `HERMES.md` with a script-only cron shape and an LLM-enhanced prompt.
 
-Script-only watchdog shape:
+Reliable watchdog pattern:
 
 ```bash
-cd /path/to/wuerzburg-tree-ping && python usecases/tree-watering-ping/tree_watering_ping.py
-cd /path/to/wuerzburg-tree-ping && python usecases/parking-ping/parking_ping.py
+cd /path/to/OpenDataWuerzburg-Possibilities && python usecases/parking-ping/parking_ping.py
 ```
 
-If creating from inside Hermes with the `cronjob` tool, use `no_agent=True` for a pure watchdog:
+Inside Hermes, create cron jobs with `no_agent=True` for pure delivery:
 
-- empty stdout = silent
-- non-empty stdout = delivered
+- stdout = Telegram/Discord message
+- empty stdout = silent, for alert-style scripts
 - non-zero exit = error alert
 
-LLM-enhanced mode is also viable: let the script emit measured facts, then ask Hermes to rewrite them as a concise human ping.
+For an “AI demo” mode, keep the script as source of truth and ask Hermes to rewrite/explain the measured output. Do not let the model invent data.
 
-More detail: [`docs/hermes-cron.md`](docs/hermes-cron.md)
+## Dashboard / visualizer
 
-## Other easy OpenData demo candidates found
+Generate a dependency-free static dashboard snapshot:
 
-I checked the portal catalog and these are good next-usecase candidates:
-
-| Dataset | Why it is easy |
-| --- | --- |
-| `fahrradzaehlung-tagesdaten-alle-zaehlstationen` | Daily bike counts by station; easy “which route is busiest?” ping. |
-| `passantenzaehlung_tagesdaten` / `passantenzaehlung_stundendaten` | Pedestrian counts for city-center locations; easy downtown activity pulse. |
-| `abfallkalender-wuerzburg` | Waste pickup dates by district; easy reminder bot, but needs district selection. |
-| `barrierefreie-toiletten-im-stadtgebiet-wuerzburg` | Accessibility/location helper; easy “nearest public toilet” style demo if user location is supplied. |
-| `eventfeed` | ZDI event feed; easy “upcoming startup/tech events” digest. |
-| `fahrradstellplaetze-stadt-wuerzburg` | Bike parking / e-bike charging / carsharing locations; easy map/search helper. |
-
-Best next demo after parking: **bike counter pulse**. It has simple numeric data and a natural AI explanation layer: “where is cycling traffic highest today?”
-
-## Example pings
-
-```text
-🌳 Würzburg OpenData watering ping (2026-06-22 09:30 UTC)
-
-🔴 Dry soil: Ahorn
-Soil moisture at 30 cm is 3.5%, 100 cm: 3.8%, air temp: 29.3°C. Recommend watering review.
+```bash
+python dashboard/generate_dashboard.py
 ```
 
+Open:
+
 ```text
-🅿️ Würzburg parking ping (2026-06-22 11:52 UTC)
-Avoid / check before driving:
-- Würzburg Juliusspital: belegt
-Likely available options:
-- Würzburg Marktgarage: frei
-- Würzburg PH Mitte: frei
+dashboard/index.html
 ```
+
+## Event framing
+
+1. Show the public OpenData source.
+2. Show the dataset ID and live JSON fields.
+3. Run one local script.
+4. Show Telegram/Hermes delivery.
+5. Ask Hermes: “why did this trigger?” or “what should I do next?”
+
+This keeps the demo grounded: AI explains and prioritizes, but municipal data decides.
 
 ## Development
 
 ```bash
 python -m pytest
-python -m wuerzburg_tree_ping.cli --json
-python -m wuerzburg_tree_ping.parking --json
+python dashboard/generate_dashboard.py
 ```
-
-## Notes for the event
-
-Good demo script:
-
-1. Show the public OpenData source.
-2. Show the dataset IDs and live JSON fields.
-3. Run a local monitor.
-4. Show the Telegram/Hermes ping.
-5. Ask Hermes: “why did this trigger?” or “what should I do next?”
-
-This keeps the demo grounded: AI explains and prioritizes, but municipal data decides.
